@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Escáner de Productos Pro</title>
+  
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/quagga/0.12.1/quagga.min.js"></script>
+
+  <style>
+    body { font-family: Arial, sans-serif; background: #121212; color: white; text-align: center; margin: 0; padding: 20px; }
+    h1 { color: #0d6efd; font-size: 24px; }
+    button { width: 80%; max-width: 300px; padding: 15px; font-size: 18px; border: none; border-radius: 50px; background: #0d6efd; color: white; font-weight: bold; cursor: pointer; margin-bottom: 20px; box-shadow: 0 4px 15px rgba(13,110,253,0.4); }
+    #interactive.viewport { position: relative; width: 100%; max-width: 400px; height: 300px; margin: 0 auto; border: 3px solid #0d6efd; border-radius: 15px; overflow: hidden; background: #000; }
+    #interactive.viewport video { width: 100%; height: 100%; object-fit: cover; }
+    .linea-guia { position: absolute; top: 50%; left: 5%; width: 90%; height: 2px; background: red; box-shadow: 0 0 10px red; z-index: 10; transform: translateY(-50%); }
+    #resultado { margin-top: 20px; font-size: 20px; padding: 15px; background: #1e1e1e; border-radius: 10px; border: 1px solid #333; display: inline-block; min-width: 200px; }
+    #estado { margin-top: 10px; color: #aaa; font-size: 14px; }
+  </style>
+</head>
+<body>
+
+  <h1>Escáner en Tiempo Real</h1>
+  <button onclick="iniciarEscaneo()">📷 ENCENDER CÁMARA</button>
+
+  <div id="interactive" class="viewport">
+    <div class="linea-guia"></div>
+  </div>
+
+  <div id="estado">Presiona el botón para escanear</div>
+  <div id="resultado">Código: Ninguno</div>
+
+  <script>
+    // 🔴 PEGA AQUÍ TU URL DE GOOGLE APPS SCRIPT GENERADA EN EL PASO 1:
+    const URL_APPLICATIONS_SCRIPT = "https://script.google.com/macros/s/AKfycbxdItEf_dZPeLiDVsVEYBCgx6LHEmUlRdggI0wrfZlnV2icfnete1hBRW-HmI-v0ptlzg/exec";
+
+    function iniciarEscaneo() {
+      const estado = document.getElementById("estado");
+      estado.innerHTML = "Iniciando cámara...";
+
+      Quagga.init({
+        inputStream: {
+          name: "Live",
+          type: "LiveStream",
+          target: document.querySelector('#interactive'),
+          constraints: { width: 640, height: 480, facingMode: "environment" }
+        },
+        decoder: { readers: ["ean_reader", "ean_8_reader", "code_128_reader"] }
+      }, function(err) {
+        if (err) {
+          estado.innerHTML = "❌ Error al abrir la cámara.";
+          return;
+        }
+        estado.innerHTML = "📡 Buscando código de barras...";
+        Quagga.start();
+      });
+
+      Quagga.onDetected(function(data) {
+        const codigo = data.codeResult.code;
+        document.getElementById("resultado").innerHTML = "🚀 Enviando: " + codigo;
+        Quagga.stop(); // Pausa la cámara para no repetir lecturas
+
+        // Enviar el código de barras a Google Sheets en segundo plano
+        fetch(URL_APPLICATIONS_SCRIPT, {
+          method: "POST",
+          mode: "no-cors", // Evita problemas de restricciones entre servidores
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ codigo: codigo })
+        })
+        .then(() => {
+          estado.innerHTML = "✅ ¡Guardado en Google Sheets!";
+          document.getElementById("resultado").innerHTML = "Código: " + codigo;
+          // Reinicia el escáner automáticamente en 2 segundos para el siguiente producto
+          setTimeout(iniciarEscaneo, 2000);
+        })
+        .catch(err => {
+          estado.innerHTML = "❌ Error al enviar al servidor.";
+          setTimeout(iniciarEscaneo, 2000);
+        });
+      });
+    }
+  </script>
+</body>
+</html>
